@@ -1,11 +1,11 @@
 use serde::Deserialize;
-use walkdir::WalkDir;
 use std::fs;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use url::Url;
+use walkdir::WalkDir;
 
 #[derive(Debug, Deserialize)]
 struct ModInfo {
@@ -31,6 +31,12 @@ struct FileInfo {
     download_url: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct SubmissionsResponse {
+    #[serde(rename = "_aRecords")]
+    records: Vec<ModInfo>,
+}
+
 fn main() {
     // agreement
     if fs::exists("./data/firstrun").is_ok_and(|x| !x) {
@@ -54,13 +60,25 @@ fn main() {
 
     println!("{}", data_win_path.to_str().unwrap());
 
-    let mod_info = get_mod_info("https://gamebanana.com/mods/615376").unwrap();
+    let mods_list = get_all_mods();
+
+    println!("Which mod do you want to install?");
+    for (k, v) in mods_list.iter().enumerate() {
+        println!("{}. {}", k, v.name);
+    }
+
+    let mut selected_mod_index = String::new();
+    io::stdin().read_line(&mut selected_mod_index).unwrap();
+    
+    let mod_info = &mods_list[selected_mod_index[..selected_mod_index.len() - 2].parse::<usize>().unwrap()];
     download_mod(&mod_info);
 
     install_mod(&mod_info, data_win_path);
+
+    println!("Mod is installed. Enjoy!");
 }
 
-fn get_mod_info(url: &str) -> Result<ModInfo, &'static str> {
+fn get_mod_info_from_url(url: &str) -> Result<ModInfo, &'static str> {
     let url_parsed = Url::parse(url).unwrap();
     let id = url_parsed.path_segments().unwrap().last().unwrap();
 
@@ -157,24 +175,26 @@ fn install_mod(mod_info: &ModInfo, data_win_path: PathBuf) {
 
     let mut command = Command::new("xdelta");
     command
-    .arg("-d")
-    .arg("-f")
-    .arg("-s")
-    .arg(data_win_backup_path)
-    .arg(xdelta_path)
-    .arg(data_win_path);
+        .arg("-d")
+        .arg("-f")
+        .arg("-s")
+        .arg(data_win_backup_path)
+        .arg(xdelta_path)
+        .arg(data_win_path);
 
     let output = command.output().unwrap();
 
-    println!("{:#?}", output);    
-
+    println!("{:#?}", output);
 }
 
 fn find_file(mod_info: &ModInfo, ext: &str) -> Option<PathBuf> {
     let mod_download_path_string = format!("./data/download/{}", &mod_info.id);
     let mod_download_path = Path::new(&mod_download_path_string);
 
-    for entry in WalkDir::new(mod_download_path).into_iter().filter_map(|x| x.ok()) {
+    for entry in WalkDir::new(mod_download_path)
+        .into_iter()
+        .filter_map(|x| x.ok())
+    {
         let path = entry.path();
         if path.is_file() {
             if let Some(extension) = path.extension().and_then(|x| x.to_str()) {
@@ -186,4 +206,15 @@ fn find_file(mod_info: &ModInfo, ext: &str) -> Option<PathBuf> {
     }
 
     None
+}
+
+fn get_all_mods() -> Vec<ModInfo> {
+    let client = reqwest::blocking::Client::new();
+    let submissions_response: SubmissionsResponse = client
+        .get("https://gamebanana.com/apiv11/Game/21841/Subfeed?_nPage=1&_sSort=new")
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
+    return submissions_response.records;
 }
