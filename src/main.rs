@@ -69,8 +69,10 @@ fn main() {
 
     let mut selected_mod_index = String::new();
     io::stdin().read_line(&mut selected_mod_index).unwrap();
-    
-    let mod_info = &mods_list[selected_mod_index[..selected_mod_index.len() - 2].parse::<usize>().unwrap()];
+
+    let mod_info = &mods_list[selected_mod_index[..selected_mod_index.len() - 2]
+        .parse::<usize>()
+        .unwrap()];
     download_mod(&mod_info);
 
     install_mod(&mod_info, data_win_path);
