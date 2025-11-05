@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::env::args;
+use walkdir::WalkDir;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -46,8 +46,18 @@ fn main() {
         let _ = fs::File::create("./data/firstrun");
     }
 
+    let data_win_path = rfd::FileDialog::new()
+        .set_title("Choose your MINDWAVE data.win file")
+        .add_filter("file", &["win"])
+        .pick_file()
+        .unwrap();
+
+    println!("{}", data_win_path.to_str().unwrap());
+
     let mod_info = get_mod_info("https://gamebanana.com/mods/615376").unwrap();
-    download_mod(mod_info);
+    download_mod(&mod_info);
+
+    install_mod(&mod_info, data_win_path);
 }
 
 fn get_mod_info(url: &str) -> Result<ModInfo, &'static str> {
@@ -65,7 +75,7 @@ fn get_mod_info(url: &str) -> Result<ModInfo, &'static str> {
     Ok(info)
 }
 
-fn download_mod(mod_info: ModInfo) {
+fn download_mod(mod_info: &ModInfo) {
     let client = reqwest::blocking::Client::new();
     let file_response: FileResponse = client
         .get(format!(
@@ -131,6 +141,49 @@ fn download_mod(mod_info: ModInfo) {
     let _ = command.output().unwrap();
 }
 
-fn install_mod(mod_info: ModInfo) {
-    
+fn install_mod(mod_info: &ModInfo, data_win_path: PathBuf) {
+    // search mod folder for xdelta file
+    let find_file_path = find_file(mod_info, "xdelta").unwrap();
+    let xdelta_path = find_file_path.as_path().canonicalize().unwrap();
+
+    println!("{:?}", xdelta_path);
+
+    let data_win_backup_path = data_win_path.parent().unwrap().join("data.win.bak");
+
+    if !fs::exists(&data_win_backup_path).unwrap() {
+        std::fs::copy(&data_win_path, data_win_backup_path.as_path()).unwrap();
+        println!("Created backup copy at data.win.bak.")
+    }
+
+    let mut command = Command::new("xdelta");
+    command
+    .arg("-d")
+    .arg("-f")
+    .arg("-s")
+    .arg(data_win_backup_path)
+    .arg(xdelta_path)
+    .arg(data_win_path);
+
+    let output = command.output().unwrap();
+
+    println!("{:#?}", output);    
+
+}
+
+fn find_file(mod_info: &ModInfo, ext: &str) -> Option<PathBuf> {
+    let mod_download_path_string = format!("./data/download/{}", &mod_info.id);
+    let mod_download_path = Path::new(&mod_download_path_string);
+
+    for entry in WalkDir::new(mod_download_path).into_iter().filter_map(|x| x.ok()) {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(extension) = path.extension().and_then(|x| x.to_str()) {
+                if extension == ext {
+                    return Some(path.to_path_buf());
+                }
+            }
+        }
+    }
+
+    None
 }

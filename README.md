@@ -5,6 +5,7 @@ MINDWAVE mod manager
 ## Requirements
 
 * 7zip with `7z` on path
+* `xdelta` on path
 
 ## Feature Roadmap
 
