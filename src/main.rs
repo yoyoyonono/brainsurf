@@ -1,222 +1,158 @@
-use serde::Deserialize;
-use std::fs;
-use std::io;
-use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
-use url::Url;
-use walkdir::WalkDir;
 
-#[derive(Debug, Deserialize)]
-struct ModInfo {
-    #[serde(rename = "_sName")]
-    name: String,
+use iced::widget::container::bordered_box;
+use iced::widget::{Button, Column, Container, Slider};
+use iced::widget::{
+    button, checkbox, column, container, horizontal_space, image, radio, row, scrollable, slider,
+    text, text_input, toggler, vertical_space,
+};
+use iced::{Center, Color, Element, Fill, Font, Pixels, alignment};
 
-    #[serde(rename = "_idRow")]
-    id: i32,
+mod logic;
+use crate::logic::{ModInfo, download_mod, get_all_mods, install_mod};
+
+pub fn main() -> iced::Result {
+    iced::application(Brainsurf::title, Brainsurf::update, Brainsurf::view)
+        .window_size(iced::Size::new(1280.0, 720.0))
+        .centered()
+        .run()
 }
 
-#[derive(Debug, Deserialize)]
-struct FileResponse {
-    #[serde(rename = "_aFiles")]
-    files: Vec<FileInfo>,
+pub struct Brainsurf {
+    screen: Screen,
+    mods: Vec<ModInfo>,
+    selected_mod: Option<ModInfo>,
+    data_win_path: Option<PathBuf>,
+    done_installing: bool,
 }
 
-#[derive(Debug, Deserialize)]
-struct FileInfo {
-    #[serde(rename = "_sFile")]
-    filename: String,
-
-    #[serde(rename = "_sDownloadUrl")]
-    download_url: String,
+#[derive(Debug, Clone)]
+pub enum Message {
+    ChangeScreen(Screen),
+    ChangeSelected(ModInfo),
+    InstallMod,
+    PickDataWinFile,
+    LaunchGame,
 }
 
-#[derive(Debug, Deserialize)]
-struct SubmissionsResponse {
-    #[serde(rename = "_aRecords")]
-    records: Vec<ModInfo>,
-}
+impl Brainsurf {
+    fn title(&self) -> String {
+        let screen = match self.screen {
+            Screen::Warning => "WARNING",
+            Screen::ModPicker => "Mod Picker",
+        };
 
-fn main() {
-    // agreement
-    if fs::exists("./data/firstrun").is_ok_and(|x| !x) {
-        println!("You agree that I'm not responsible and you've made backups blablabla...");
-        println!("y/N? ");
-        let mut answer = String::new();
-        io::stdin().read_line(&mut answer).unwrap();
-        println!("Very well.");
-        if !answer.chars().nth(0).unwrap().eq_ignore_ascii_case(&'y') {
-            std::process::exit(0);
-        }
-        let _ = fs::create_dir("./data/");
-        let _ = fs::File::create("./data/firstrun");
+        format!("brainsurf - {}", screen)
     }
 
-    let data_win_path = rfd::FileDialog::new()
-        .set_title("Choose your MINDWAVE data.win file")
-        .add_filter("file", &["win"])
-        .pick_file()
-        .unwrap();
-
-    println!("{}", data_win_path.to_str().unwrap());
-
-    let mods_list = get_all_mods();
-
-    println!("Which mod do you want to install?");
-    for (k, v) in mods_list.iter().enumerate() {
-        println!("{}. {}", k, v.name);
-    }
-
-    let mut selected_mod_index = String::new();
-    io::stdin().read_line(&mut selected_mod_index).unwrap();
-
-    let mod_info = &mods_list[selected_mod_index[..selected_mod_index.len() - 2]
-        .parse::<usize>()
-        .unwrap()];
-    download_mod(&mod_info);
-
-    install_mod(&mod_info, data_win_path);
-
-    println!("Mod is installed. Enjoy!");
-}
-
-fn get_mod_info_from_url(url: &str) -> Result<ModInfo, &'static str> {
-    let url_parsed = Url::parse(url).unwrap();
-    let id = url_parsed.path_segments().unwrap().last().unwrap();
-
-    let info: ModInfo = reqwest::blocking::get(format!(
-        "https://gamebanana.com/apiv11/Mod/{}/ProfilePage",
-        id
-    ))
-    .unwrap()
-    .json()
-    .unwrap();
-
-    Ok(info)
-}
-
-fn download_mod(mod_info: &ModInfo) {
-    let client = reqwest::blocking::Client::new();
-    let file_response: FileResponse = client
-        .get(format!(
-            "https://gamebanana.com/apiv11/Mod/{}/ProfilePage",
-            mod_info.id
-        ))
-        .send()
-        .unwrap()
-        .json()
-        .unwrap();
-
-    let file_info = &file_response.files.get(0).unwrap();
-
-    let downloaded_file = client
-        .get(&file_info.download_url)
-        .send()
-        .unwrap()
-        .bytes()
-        .unwrap();
-
-    let mod_download_path_string = format!("./data/download/{}", &mod_info.id);
-    let mod_download_path = Path::new(&mod_download_path_string);
-
-    let _ = fs::create_dir_all(mod_download_path);
-
-    let mod_pathbuf = PathBuf::from(mod_download_path);
-
-    let mod_archive_pathbuf = mod_pathbuf.join(&file_info.filename);
-    let mod_archive_path = mod_archive_pathbuf.as_path();
-
-    fs::write(mod_archive_path, &downloaded_file).unwrap();
-
-    let mod_extracted_dir = Path::new(&file_info.filename)
-        .file_stem()
-        .unwrap()
-        .to_string_lossy();
-
-    let _ = fs::create_dir(format!(
-        "{}/{}",
-        mod_download_path.to_string_lossy(),
-        mod_extracted_dir
-    ));
-
-    let mod_extracted_pathbuf = mod_pathbuf.join(mod_extracted_dir.to_string());
-    let mod_extracted_path = mod_extracted_pathbuf.as_path().canonicalize().unwrap();
-
-    let mut command = Command::new("7z");
-    command
-        .arg("x")
-        .arg(format!(
-            "-o{}",
-            mod_extracted_path.to_string_lossy().replace(r"\\?\", "")
-        ))
-        .arg(format!(
-            "{}",
-            mod_archive_path
-                .canonicalize()
-                .unwrap()
-                .to_string_lossy()
-                .replace(r"\\?\", "")
-        ));
-
-    let _ = command.output().unwrap();
-}
-
-fn install_mod(mod_info: &ModInfo, data_win_path: PathBuf) {
-    // search mod folder for xdelta file
-    let find_file_path = find_file(mod_info, "xdelta").unwrap();
-    let xdelta_path = find_file_path.as_path().canonicalize().unwrap();
-
-    println!("{:?}", xdelta_path);
-
-    let data_win_backup_path = data_win_path.parent().unwrap().join("data.win.bak");
-
-    if !fs::exists(&data_win_backup_path).unwrap() {
-        std::fs::copy(&data_win_path, data_win_backup_path.as_path()).unwrap();
-        println!("Created backup copy at data.win.bak.")
-    }
-
-    let mut command = Command::new("xdelta");
-    command
-        .arg("-d")
-        .arg("-f")
-        .arg("-s")
-        .arg(data_win_backup_path)
-        .arg(xdelta_path)
-        .arg(data_win_path);
-
-    let output = command.output().unwrap();
-
-    println!("{:#?}", output);
-}
-
-fn find_file(mod_info: &ModInfo, ext: &str) -> Option<PathBuf> {
-    let mod_download_path_string = format!("./data/download/{}", &mod_info.id);
-    let mod_download_path = Path::new(&mod_download_path_string);
-
-    for entry in WalkDir::new(mod_download_path)
-        .into_iter()
-        .filter_map(|x| x.ok())
-    {
-        let path = entry.path();
-        if path.is_file() {
-            if let Some(extension) = path.extension().and_then(|x| x.to_str()) {
-                if extension == ext {
-                    return Some(path.to_path_buf());
-                }
+    fn update(&mut self, event: Message) {
+        match event {
+            Message::ChangeScreen(new_screen) => {
+                self.screen = new_screen;
+            }
+            Message::ChangeSelected(new_selected) => {
+                self.selected_mod = Some(new_selected);
+                self.done_installing = false;
+            }
+            Message::InstallMod => {
+                self.done_installing = false;
+                download_mod(self.selected_mod.as_ref().unwrap());
+                install_mod(
+                    (self.selected_mod.as_ref()).unwrap(),
+                    (self.data_win_path.as_ref()).unwrap().to_path_buf(),
+                );
+                self.done_installing = true;
+            }
+            Message::PickDataWinFile => {
+                self.data_win_path = Some(
+                    rfd::FileDialog::new()
+                        .set_title("Choose your MINDWAVE data.win file")
+                        .add_filter("file", &["win"])
+                        .pick_file()
+                        .unwrap(),
+                );
+            }
+            Message::LaunchGame => {
+                open::that("steam://rungameid/2741670").unwrap();
             }
         }
     }
 
-    None
+    fn view(&self) -> Element<Message> {
+        match self.screen {
+            Screen::Warning => self.welcome(),
+            Screen::ModPicker => self.mod_picker(),
+        }
+        .into()
+    }
+
+    fn welcome(&self) -> Element<Message> {
+        let content = Self::container("⚠WARNING⚠")
+            .push("You agree that you've made backups blababla")
+            .push(button("Continue").on_press(Message::ChangeScreen(Screen::ModPicker)))
+            .align_x(alignment::Horizontal::Center);
+
+        container(content).center_x(Fill).center_y(Fill).into()
+    }
+
+    fn mod_picker(&self) -> Element<Message> {
+        let text_content = text("Choose a mod")
+            .size(30)
+            .align_x(alignment::Horizontal::Left)
+            .align_y(alignment::Vertical::Top);
+        let title_container: Element<Message> = container(text_content).padding(20).into();
+
+        let mut mods_list: Column<Message> = column![];
+
+        for x in &self.mods {
+            mods_list = mods_list.push(
+                radio(&x.name, x, self.selected_mod.as_ref(), |x: &ModInfo| {
+                    Message::ChangeSelected(x.clone())
+                })
+                .size(20),
+            );
+        }
+
+        let mods_container: Element<Message> = container(mods_list.padding(10).spacing(10)).into();
+
+        let folder_button = button(text("Pick data.win file")).on_press(Message::PickDataWinFile);
+        let install_button = button(text("Install")).on_press(Message::InstallMod);
+        let launch_button = button(text("Launch")).on_press(Message::LaunchGame);
+
+        let buttons = row![folder_button, install_button, launch_button]
+            .spacing(10)
+            .padding(10);
+
+        let is_done = text(if self.done_installing {
+            "Done Installing"
+        } else {
+            ""
+        })
+        .size(20);
+
+        column![title_container, mods_container, buttons, is_done].into()
+    }
+
+    fn container(title: &str) -> Column<'_, Message> {
+        column![text(title).size(30)].spacing(20)
+    }
 }
 
-fn get_all_mods() -> Vec<ModInfo> {
-    let client = reqwest::blocking::Client::new();
-    let submissions_response: SubmissionsResponse = client
-        .get("https://gamebanana.com/apiv11/Game/21841/Subfeed?_nPage=1&_sSort=new")
-        .send()
-        .unwrap()
-        .json()
-        .unwrap();
-    return submissions_response.records;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Screen {
+    Warning,
+    ModPicker,
+}
+
+impl Default for Brainsurf {
+    fn default() -> Self {
+        let mods = get_all_mods();
+        Self {
+            screen: Screen::Warning,
+            mods: mods,
+            selected_mod: None,
+            data_win_path: None,
+            done_installing: false,
+        }
+    }
 }
