@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::thread::current;
 
 use iced::widget::container::bordered_box;
 use iced::widget::{Button, Column, Container, Slider};
@@ -6,7 +7,7 @@ use iced::widget::{
     button, checkbox, column, container, horizontal_space, image, radio, row, scrollable, slider,
     text, text_input, toggler, vertical_space,
 };
-use iced::{Center, Color, Element, Fill, Font, Pixels, alignment};
+use iced::{Center, Color, Element, Fill, Font, Length, Pixels, alignment};
 
 mod logic;
 use crate::logic::{ModInfo, download_mod, get_all_mods, install_mod};
@@ -33,6 +34,7 @@ pub enum Message {
     InstallMod,
     PickDataWinFile,
     LaunchGame,
+    OpenModPage,
 }
 
 impl Brainsurf {
@@ -74,6 +76,9 @@ impl Brainsurf {
             }
             Message::LaunchGame => {
                 open::that("steam://rungameid/2741670").unwrap();
+            }
+            Message::OpenModPage => {
+                open::that(format!("https://gamebanana.com/mods/{}", self.selected_mod.as_ref().unwrap().id)).unwrap();
             }
         }
     }
@@ -130,7 +135,37 @@ impl Brainsurf {
         })
         .size(20);
 
-        column![title_container, mods_container, buttons, is_done].into()
+        let left_half = column![title_container, mods_container, buttons, is_done];
+
+        let mod_info_name = container(text(if let Some(current_mod) = &self.selected_mod {
+            current_mod.name.clone()
+        } else {
+            "".to_string()
+        }).size(40));
+
+        let mod_description = text(if let Some(current_mod) = &self.selected_mod {
+            current_mod.description.clone().unwrap_or("".to_string())
+        } else {
+            "".to_string()
+        }).size(30);
+
+        let mod_author = text(format!("Author: {}", if let Some(current_mod) = &self.selected_mod {
+            current_mod.submitter.name.clone()
+        } else {
+            "".to_string()
+        })).size(20);
+
+        let mod_text = text(format!("Description: {}", if let Some(current_mod) = &self.selected_mod {
+            current_mod.text.clone().unwrap_or("".to_string())
+        } else {
+            "".to_string()
+        })).size(20);
+
+        let open_mod_page = button(text("Open Gamebanana Page")).on_press(Message::OpenModPage);
+
+        let right_half = column![mod_info_name, mod_description, mod_author, mod_text, open_mod_page].padding(20);
+
+        row![left_half.width(Length::Fill), right_half.width(Length::Fill)].into()
     }
 
     fn container(title: &str) -> Column<'_, Message> {
@@ -139,7 +174,7 @@ impl Brainsurf {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Screen {
+pub enum Screen {
     Warning,
     ModPicker,
 }

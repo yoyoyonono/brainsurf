@@ -15,6 +15,25 @@ pub struct ModInfo {
 
     #[serde(rename = "_idRow")]
     pub id: i32,
+
+    #[serde(rename = "_aSubmitter")]
+    pub submitter: Submitter,
+    
+    #[serde(rename = "_sDescription")]
+    pub description: Option<String>,
+
+    #[serde(rename = "_sText")]
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+pub struct Submitter {
+    #[serde(rename = "_sName")]
+    pub name: String,
+    
+    #[serde(rename = "_sAvatarUrl")]
+    pub avatar_url: String,
+
 }
 
 #[derive(Debug, Deserialize)]
@@ -176,5 +195,5 @@ pub fn get_all_mods() -> Vec<ModInfo> {
         .unwrap()
         .json()
         .unwrap();
-    return submissions_response.records;
+    return submissions_response.records.iter().map(|x| get_mod_info_from_url(format!("https://gamebanana.com/mods/{}", x.id).as_str()).unwrap()).collect()
 }
