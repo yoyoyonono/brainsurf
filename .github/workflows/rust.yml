@@ -5,7 +5,7 @@ on:
     branches:
       - "**"
     tags:
-      - "v*"
+      - "v*"        # version tags
   pull_request:
   release:
     types: [created, published]
@@ -17,12 +17,11 @@ jobs:
   build:
     runs-on: windows-latest
 
-    # Use the commit referenced by a release if this workflow
-    # was triggered via "release" instead of a push.
     steps:
       - name: Checkout correct commit
         uses: actions/checkout@v4
         with:
+          # If workflow triggered by a release → use the tag for that release
           ref: ${{ github.event.release.tag_name || github.ref_name }}
 
       - name: Install Rust Stable
@@ -31,30 +30,38 @@ jobs:
       - name: Build Release
         run: cargo build --release
 
-      # Normal CI artifact
+      - name: Create ZIP package
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.release.tag_name || github.ref_name }}"
+          $zipname = "brainsurf-$version-windows.zip"
+          Compress-Archive -Path target/release/*.exe -DestinationPath $zipname
+          Write-Output "ZIP created: $zipname"
+
+      # Upload artifact when NOT a tag push or release event
       - name: Upload CI Artifact
         if: >
           github.event_name != 'release'
           && !startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
-          name: windows-release
-          path: target/release/*.exe
+          name: windows-release-zip
+          path: "*.zip"
 
-      # Attach asset when tag is pushed
+      # Upload ZIP to GitHub Release for tag pushes
       - name: Upload Release Asset (tag push)
         if: startsWith(github.ref, 'refs/tags/') && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          files: target/release/*.exe
+          files: "*.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Attach asset when manually creating a release
+      # Upload ZIP to GitHub Release for manual release creation
       - name: Upload Release Asset (release event)
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: target/release/*.exe
+          files: "*.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
