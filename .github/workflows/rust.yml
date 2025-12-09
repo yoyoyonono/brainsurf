@@ -2,7 +2,13 @@ name: Windows Build
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
   pull_request:
+  release:
+    types: [created, published]
 
 env:
   CARGO_TERM_COLOR: always
@@ -11,8 +17,13 @@ jobs:
   build:
     runs-on: windows-latest
 
+    # Use the commit referenced by a release if this workflow
+    # was triggered via "release" instead of a push.
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout correct commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref_name }}
 
       - name: Install Rust Stable
         uses: dtolnay/rust-toolchain@stable
@@ -20,8 +31,30 @@ jobs:
       - name: Build Release
         run: cargo build --release
 
-      - name: Upload Windows Binary
+      # Normal CI artifact
+      - name: Upload CI Artifact
+        if: >
+          github.event_name != 'release'
+          && !startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
           path: target/release/*.exe
+
+      # Attach asset when tag is pushed
+      - name: Upload Release Asset (tag push)
+        if: startsWith(github.ref, 'refs/tags/') && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/release/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Attach asset when manually creating a release
+      - name: Upload Release Asset (release event)
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/release/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
