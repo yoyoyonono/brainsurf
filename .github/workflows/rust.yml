@@ -29,18 +29,8 @@ jobs:
       - name: Build Release
         run: cargo build --release
 
-      # Install 7-Zip (provides 7z.exe)
-      - name: Install 7-Zip
-        run: choco install 7zip -y
-
-      # Download xdelta (prebuilt binary)
-      - name: Download xdelta
-        shell: pwsh
-        run: |
-          $url = "https://github.com/jmacd/xdelta/releases/download/v3.1.0/xdelta3-3.1.0-x86_64.exe.zip"
-          Invoke-WebRequest -Uri $url -OutFile xdelta.zip
-          Expand-Archive xdelta.zip -DestinationPath xdelta
-          Get-ChildItem -Recurse xdelta
+      - name: Install dependencies (7-Zip + xdelta)
+        run: choco install 7zip xdelta3 -y
 
       # Prepare packaging directory
       - name: Prepare package
