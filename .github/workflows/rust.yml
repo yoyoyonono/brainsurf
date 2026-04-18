@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - "**"
+    tags:
+      - "v*"   # 🔴 FIX: tag pushes now trigger workflow
   pull_request:
   release:
     types: [created, published]
@@ -14,35 +16,18 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    if: github.event_name != 'release'
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref_name }}
 
-      - name: Install Rust
+      - name: Install Rust Stable
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Release
         run: cargo build --release
-
-      - name: Upload artifact (commit-scoped)
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build-${{ github.sha }}
-          path: target/release/*.exe
-
-  release:
-    runs-on: windows-latest
-    if: github.event_name == 'release'
-
-    steps:
-      - name: Download artifact from commit
-        uses: dawidd6/action-download-artifact@v3
-        with:
-          workflow: Windows Build
-          commit: ${{ github.event.release.target_commitish }}
-          name: windows-build-${{ github.event.release.target_commitish }}
-          path: downloaded
 
       - name: Install dependencies (7-Zip + xdelta)
         run: choco install 7zip xdelta3 -y
@@ -52,8 +37,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path package
 
-          # App binary from CI artifact
-          Copy-Item downloaded\*.exe package/
+          # App binary
+          Copy-Item target/release/*.exe package/
 
           # 7-Zip
           Copy-Item "C:\Program Files\7-Zip\7z.exe" package/
@@ -64,12 +49,22 @@ jobs:
       - name: Create ZIP package
         shell: pwsh
         run: |
-          $version = "${{ github.event.release.tag_name }}"
+          $version = "${{ github.event.release.tag_name || github.ref_name }}"
           $zipname = "brainsurf-$version-windows.zip"
           Compress-Archive -Path package\* -DestinationPath $zipname
           Write-Output "ZIP created: $zipname"
 
+      # Upload CI artifact (non-release runs)
+      - name: Upload CI Artifact
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-zip
+          path: "*.zip"
+
+      # Upload to GitHub Release (tag push OR release event)
       - name: Upload Release Asset
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: "*.zip"
