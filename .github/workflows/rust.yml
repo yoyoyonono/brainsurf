@@ -5,7 +5,7 @@ on:
     branches:
       - "**"
     tags:
-      - "v*"        # version tags
+      - "v*"
   pull_request:
   release:
     types: [created, published]
@@ -21,7 +21,6 @@ jobs:
       - name: Checkout correct commit
         uses: actions/checkout@v4
         with:
-          # If workflow triggered by a release → use the tag for that release
           ref: ${{ github.event.release.tag_name || github.ref_name }}
 
       - name: Install Rust Stable
@@ -30,15 +29,43 @@ jobs:
       - name: Build Release
         run: cargo build --release
 
+      # Install 7-Zip (provides 7z.exe)
+      - name: Install 7-Zip
+        run: choco install 7zip -y
+
+      # Download xdelta (prebuilt binary)
+      - name: Download xdelta
+        shell: pwsh
+        run: |
+          $url = "https://github.com/jmacd/xdelta/releases/download/v3.1.0/xdelta3-3.1.0-x86_64.exe.zip"
+          Invoke-WebRequest -Uri $url -OutFile xdelta.zip
+          Expand-Archive xdelta.zip -DestinationPath xdelta
+          Get-ChildItem -Recurse xdelta
+
+      # Prepare packaging directory
+      - name: Prepare package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package
+
+          # Copy your app
+          Copy-Item target/release/*.exe package/
+
+          # Copy 7z.exe from installed location
+          Copy-Item "C:\Program Files\7-Zip\7z.exe" package/
+
+          # Copy xdelta exe
+          Copy-Item xdelta\*.exe package/
+
       - name: Create ZIP package
         shell: pwsh
         run: |
           $version = "${{ github.event.release.tag_name || github.ref_name }}"
           $zipname = "brainsurf-$version-windows.zip"
-          Compress-Archive -Path target/release/*.exe -DestinationPath $zipname
+          Compress-Archive -Path package\* -DestinationPath $zipname
           Write-Output "ZIP created: $zipname"
 
-      # Upload artifact when NOT a tag push or release event
+      # CI artifact (non-release builds)
       - name: Upload CI Artifact
         if: >
           github.event_name != 'release'
@@ -48,7 +75,7 @@ jobs:
           name: windows-release-zip
           path: "*.zip"
 
-      # Upload ZIP to GitHub Release for tag pushes
+      # Tag push → upload to release
       - name: Upload Release Asset (tag push)
         if: startsWith(github.ref, 'refs/tags/') && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -57,7 +84,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Upload ZIP to GitHub Release for manual release creation
+      # Manual release → upload
       - name: Upload Release Asset (release event)
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
