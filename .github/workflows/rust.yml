@@ -38,14 +38,14 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path package
 
-          # Copy your app
-          Copy-Item target/release/*.exe package/
+          # Your app
+          Copy-Item downloaded\*.exe package/
 
-          # Copy 7z.exe from installed location
+          # 7-Zip
           Copy-Item "C:\Program Files\7-Zip\7z.exe" package/
 
-          # Copy xdelta exe
-          Copy-Item xdelta\*.exe package/
+          # xdelta (Chocolatey shim)
+          Copy-Item "C:\ProgramData\chocolatey\bin\xdelta3.exe" package/
 
       - name: Create ZIP package
         shell: pwsh
