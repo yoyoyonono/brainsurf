@@ -142,6 +142,8 @@ impl Brainsurf {
         } else {
             "".to_string()
         }).size(40));
+        
+        let open_mod_page = button(text("Open Gamebanana Page")).on_press(Message::OpenModPage);
 
         let mod_description = text(if let Some(current_mod) = &self.selected_mod {
             current_mod.description.clone().unwrap_or("".to_string())
@@ -161,9 +163,7 @@ impl Brainsurf {
             "".to_string()
         })).size(20);
 
-        let open_mod_page = button(text("Open Gamebanana Page")).on_press(Message::OpenModPage);
-
-        let right_half = column![mod_info_name, mod_description, mod_author, mod_text, open_mod_page].padding(20);
+        let right_half = column![mod_info_name, open_mod_page, mod_description, mod_author, mod_text].padding(20);
 
         row![left_half.width(Length::Fill), right_half.width(Length::Fill)].into()
     }

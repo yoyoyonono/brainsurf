@@ -13,6 +13,9 @@ pub struct ModInfo {
     #[serde(rename = "_sName")]
     pub name: String,
 
+    #[serde(rename = "_sModelName")]
+    pub model_name: Option<String>,
+
     #[serde(rename = "_idRow")]
     pub id: i32,
 
@@ -60,7 +63,6 @@ struct SubmissionsResponse {
 fn get_mod_info_from_url(url: &str) -> Result<ModInfo, &'static str> {
     let url_parsed = Url::parse(url).unwrap();
     let id = url_parsed.path_segments().unwrap().last().unwrap();
-
     let info: ModInfo = reqwest::blocking::get(format!(
         "https://gamebanana.com/apiv11/Mod/{}/ProfilePage",
         id
@@ -189,11 +191,12 @@ fn find_file(mod_info: &ModInfo, ext: &str) -> Option<PathBuf> {
 
 pub fn get_all_mods() -> Vec<ModInfo> {
     let client = reqwest::blocking::Client::new();
-    let submissions_response: SubmissionsResponse = client
+    let submissions_response = client
         .get("https://gamebanana.com/apiv11/Game/21841/Subfeed?_nPage=1&_sSort=new")
         .send()
-        .unwrap()
+        .unwrap();
+    let prelim_mod_info: SubmissionsResponse = submissions_response
         .json()
         .unwrap();
-    return submissions_response.records.iter().map(|x| get_mod_info_from_url(format!("https://gamebanana.com/mods/{}", x.id).as_str()).unwrap()).collect()
+    return prelim_mod_info.records.iter().filter(|x| x.model_name == Some("Mod".to_string())).map(|x| get_mod_info_from_url(format!("https://gamebanana.com/mods/{}", x.id).as_str()).unwrap()).collect()
 }
