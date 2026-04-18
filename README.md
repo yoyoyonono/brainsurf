@@ -2,6 +2,8 @@
 
 MINDWAVE mod manager
 
+![Screenshot of application](screenshot1.png)
+
 ## Requirements
 
 * 7zip with `7z` on path
