@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::thread::current;
 
 use iced::widget::container::bordered_box;
 use iced::widget::{Button, Column, Container, Slider};
@@ -134,8 +133,15 @@ impl Brainsurf {
             ""
         })
         .size(20);
+        
+        let instructions = text("\
+            1. Pick data.win\n\
+            2. Choose mod\n\
+            3. Install\n\
+            4. Launch\n\
+        ").size(20);
 
-        let left_half = column![title_container, mods_container, buttons, is_done];
+        let left_half = column![title_container, mods_container, buttons, is_done, instructions];
 
         let mod_info_name = container(text(if let Some(current_mod) = &self.selected_mod {
             current_mod.name.clone()
