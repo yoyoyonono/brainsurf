@@ -164,7 +164,7 @@ impl Brainsurf {
         })).size(20);
 
         let mod_text = text(format!("Description: {}", if let Some(current_mod) = &self.selected_mod {
-            current_mod.text.clone().unwrap_or("".to_string())
+            strip_html(current_mod.text.clone().unwrap_or("".to_string()))
         } else {
             "".to_string()
         })).size(20);
@@ -177,6 +177,25 @@ impl Brainsurf {
     fn container(title: &str) -> Column<'_, Message> {
         column![text(title).size(30)].spacing(20)
     }
+}
+
+fn strip_html(s: String) -> String {
+    let line_break = s.replace("<br>", "\n");
+    let mut new_string = "".to_string();
+    let mut in_brackets = false;
+    for c in line_break.chars() {
+        if c == '<' {
+            in_brackets = true;
+        } else if c == '>' {
+            in_brackets = false;
+        } else {
+            if in_brackets {
+                continue
+            }
+            new_string += &c.to_string();
+        }
+    }
+    new_string.to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
