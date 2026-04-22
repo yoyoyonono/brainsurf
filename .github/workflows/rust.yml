@@ -2,13 +2,8 @@ name: Windows Build
 
 on:
   push:
-    branches:
-      - "**"
     tags:
-      - "v*"   # 🔴 FIX: tag pushes now trigger workflow
-  pull_request:
-  release:
-    types: [created, published]
+      - "v*"   # only run on version tags
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,8 +15,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name || github.ref_name }}
 
       - name: Install Rust Stable
         uses: dtolnay/rust-toolchain@stable
@@ -49,22 +42,12 @@ jobs:
       - name: Create ZIP package
         shell: pwsh
         run: |
-          $version = "${{ github.event.release.tag_name || github.ref_name }}"
+          $version = "${{ github.ref_name }}"
           $zipname = "brainsurf-$version-windows.zip"
           Compress-Archive -Path package\* -DestinationPath $zipname
           Write-Output "ZIP created: $zipname"
 
-      # Upload CI artifact (non-release runs)
-      - name: Upload CI Artifact
-        if: github.event_name != 'release'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-release-zip
-          path: "*.zip"
-
-      # Upload to GitHub Release (tag push OR release event)
-      - name: Upload Release Asset
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+      - name: Upload Release Asset (create release)
         uses: softprops/action-gh-release@v2
         with:
           files: "*.zip"
