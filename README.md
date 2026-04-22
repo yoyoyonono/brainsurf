@@ -11,8 +11,8 @@ MINDWAVE mod manager
 
 ## Feature Roadmap
 
-- [x] Download mods from GameBanana
-- [x] Patch `game.win` with the various formats
-- [ ] Mod-specific support for changing other files
-- [ ] Standardizable format
-- [ ] Enable multiple mods at once
+* [x] Download mods from GameBanana
+* [x] Patch `game.win` with the various formats
+* [ ] Mod-specific support for changing other files
+* [ ] Standardizable format
+* [ ] Enable multiple mods at once
